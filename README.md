@@ -32,6 +32,50 @@ This writes CSV files to `output/portfolio/`:
 
 The script only prints row counts and checks against the report's own totals, never the data itself. `data/` and `output/` are in `.gitignore`.
 
+## Transaktions- og saldorapport
+
+1. In SaxoTrader, download the **Handels- og saldorapport** (PDF) for the same period and put it in `data/`.
+2. Run:
+
+   ```sh
+   .venv/bin/python -m saxobank.transaction_report
+   ```
+
+This writes CSV files to `output/transactions/`, per account:
+
+| File | Contents |
+|---|---|
+| `trades.csv` | Every booking: trades, dividends, deposits, fees, interest and corporate actions |
+| `closed_positions.csv` | Closed positions with open/close dates, prices and realized gain/loss |
+| `bookings.csv` | Bookings summed by product and type |
+| `positions.csv` | Current positions per lot, with ISIN and market value |
+
+Account ids are not written out. Accounts are named by type (e.g. Aktiesparekonto) or numbered.
+
+## Own return calculations
+
+```sh
+.venv/bin/python -m saxobank.returns
+```
+
+Uses both reports and writes to `output/returns/`:
+
+| File | Contents |
+|---|---|
+| `instrument_returns.csv` | Per account and instrument: invested, sold, dividends, costs, market value, gain/loss, return on invested amount and annual money-weighted return (XIRR) |
+| `account_returns.csv` | Per account and in total: deposits, withdrawals, value today, gain/loss and annual money-weighted return |
+
+The booked amounts in the report already include costs, so the gain on an instrument is its market value plus everything booked on it. The account totals match the portfolio report exactly. Per instrument, a few papers differ from Saxo's own figure, because Saxo counts dividends (gross vs. after tax) and corporate actions (mergers, spin-offs) differently per instrument.
+
+## Graphical overview
+
+```sh
+.venv/bin/python -m saxobank.report          # output/report.html from your reports
+.venv/bin/python -m saxobank.report --demo   # output/report_demo.html with made-up numbers
+```
+
+One self-contained HTML page: total return, account value against net deposits over time, return per period, gain/loss per instrument, allocation and the biggest holdings, plus tables for accounts and every instrument. Open it in a browser. It loads nothing from the internet, so the data stays on your computer. Light and dark mode follow the system setting.
+
 ## Tests
 
 ```sh
