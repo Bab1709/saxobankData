@@ -2,11 +2,12 @@
 
 ## About project
 
-saxobankData: a tool that fetches data from my own Saxo Bank portfolio through the official Saxo OpenAPI, so I can run data analysis on it (holdings, performance, transactions, allocation and so on).
+saxobankData: a tool that analyses my own Saxo Bank portfolio (holdings, returns, transactions, allocation and so on) from reports I export manually from SaxoTrader.
 
-* Login uses OAuth 2.0 (Authorization Code Grant with PKCE). The user logs in on Saxo's own login page. This project never handles my Saxo username or password.
-* Use the simulation environment (SIM, `https://gateway.saxobank.com/sim/openapi`) by default. Only use LIVE (`https://gateway.saxobank.com/openapi`) when I explicitly ask for it.
-* The project only reads data. Never write code that places, changes or cancels orders, moves money or changes account settings, not even as an example or a test.
+* There is no connection to Saxo. The project does not use the Saxo OpenAPI, has no login, no App Key, no tokens and makes no network calls to Saxo. Do not add any of that unless I explicitly ask for it.
+* I export reports (Excel/CSV) from SaxoTrader and put them in `data/`. The code only reads files from `data/` and writes results to `output/`.
+* Never write code that places, changes or cancels orders, moves money or changes account settings, not even as an example or a test.
+* You may look at the column names and structure of files in `data/` to write parsers, but never print or quote the actual rows, amounts or account details.
 
 ## Git workflow
 
@@ -25,37 +26,36 @@ This repository is public. Anyone can read everything in it, including the full 
 
 There are two kinds of things that must never reach git:
 
-1. **Secrets:** anything that gives access to my Saxo account.
-2. **My financial data:** anything that shows what I own, what I have traded or who I am.
-
-### Secrets
-
-* The Saxo App Key, App Secret, access tokens and refresh tokens must only live in `.env` (or in memory while the program runs). Read them from environment variables. Never write them in code, config files, tests, comments, docs or commit messages.
-* Never commit `.env` files. Make sure `.env` and `.env.*` are listed in `.gitignore`, with the exception of `.env.example`.
-* Keep a `.env.example` with the variable names and empty or fake values.
-* If tokens are saved between runs, save them in a file that is in `.gitignore` (for example `.tokens/`), never inside source folders.
-* If the project has a web interface, the App Secret and tokens must never reach the browser. All calls to Saxo go through our own server.
+1. **My financial data:** anything that shows what I own, what I have traded or who I am.
+2. **Secrets:** anything that gives access to any of my accounts. The project should not need any, so if a secret ever shows up, that is a sign something is wrong.
 
 ### My financial data
 
-* Never commit data fetched from Saxo. Save it only in `data/` and `output/`, and make sure both folders are in `.gitignore`.
-* That includes raw API responses, CSV, Excel, JSON, Parquet, SQLite and other database files, charts and reports made from real data, and log files.
+* Never commit the reports I export from Saxo, or anything made from them. They live only in `data/` and `output/`, and both folders must be in `.gitignore`.
+* That includes CSV, Excel, PDF, JSON, Parquet, SQLite and other database files, charts and reports made from real data, and log files.
+* Saxo exports usually contain my name and account number in the file itself, so treat every exported file as private, even if it looks harmless.
 * Never commit account numbers, `ClientKey`, `AccountKey`, `AccountId`, my name, email, address, real positions, amounts or trade history. Not in code, not in tests, not in comments.
-* Tests and examples must use clearly fake data (for example `AccountKey: "FAKE-ACCOUNT-123"` and round made-up amounts). Never copy a real API response into a test.
+* Tests and examples must use clearly fake data (for example `AccountKey: "FAKE-ACCOUNT-123"` and round made-up amounts). Never copy rows from a real export into a test.
 * Jupyter notebooks: clear all outputs before committing (`jupyter nbconvert --clear-output --inplace <file>.ipynb`). Outputs can contain my real portfolio.
-* Never log or print full API responses or tokens. If you need to debug, log only status codes and field names.
+* Never log or print full rows of my data. If you need to debug, print only column names, data types and row counts.
+
+### Secrets
+
+* Never write passwords, keys or tokens in code, config files, tests, comments, docs or commit messages.
+* Never commit `.env` files. Keep `.env`, `.env.*` and `.tokens/` in `.gitignore` as a safety net.
 
 ### Files that must be in `.gitignore`
 
 ```
 .env
 .env.*
-!.env.example
 .tokens/
 data/
 output/
 *.csv
+*.xls
 *.xlsx
+*.pdf
 *.parquet
 *.db
 *.sqlite
@@ -91,7 +91,7 @@ node_modules/
 
 * Stop and tell me right away.
 * Do not try to hide it by just deleting the file in a new commit. It is still in the history.
-* If it was a secret: tell me to create a new App Secret on the Saxo developer portal and log out of all sessions, so the old keys and tokens stop working.
+* If it was a secret: tell me which one, so I can change or revoke it right away.
 * If it was financial data: tell me which data. Cleaning the history is something we decide together.
 
 ### Other
