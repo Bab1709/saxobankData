@@ -1,16 +1,17 @@
 # Secrets
 .env
 .env.*
-!.env.example
 .tokens/
 *.pem
 *.key
 
-# Financial data fetched from Saxo
+# Financial data exported from Saxo
 data/
 output/
 *.csv
+*.xls
 *.xlsx
+*.pdf
 *.parquet
 *.db
 *.sqlite
