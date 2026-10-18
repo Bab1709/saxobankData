@@ -17,6 +17,8 @@ output/
 *.log
 
 # Tooling
+.venv/
+.pytest_cache/
 .ipynb_checkpoints/
 .vscode/
 .idea/
