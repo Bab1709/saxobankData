@@ -67,6 +67,15 @@ Uses both reports and writes to `output/returns/`:
 
 The booked amounts in the report already include costs, so the gain on an instrument is its market value plus everything booked on it. The account totals match the portfolio report exactly. Per instrument, a few papers differ from Saxo's own figure, because Saxo counts dividends (gross vs. after tax) and corporate actions (mergers, spin-offs) differently per instrument.
 
+## Graphical overview
+
+```sh
+.venv/bin/python -m saxobank.report          # output/report.html from your reports
+.venv/bin/python -m saxobank.report --demo   # output/report_demo.html with made-up numbers
+```
+
+One self-contained HTML page: total return, account value against net deposits over time, return per period, gain/loss per instrument, allocation and the biggest holdings, plus tables for accounts and every instrument. Open it in a browser. It loads nothing from the internet, so the data stays on your computer. Light and dark mode follow the system setting.
+
 ## Tests
 
 ```sh
