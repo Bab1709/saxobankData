@@ -168,6 +168,141 @@ def build_columns(phrases: list[Phrase], spec: list[tuple]) -> list[Column]:
     return columns
 
 
+@dataclass(frozen=True)
+class Field:
+    """A column in a table read by `read_anchored_table`.
+
+    kind is "left" (left-aligned text), "centre" (centred text),
+    "number" (right-aligned number) or "number_centre" (centred number).
+    """
+    name: str
+    header: str  # start of the header phrase
+    kind: str
+
+
+def read_anchored_table(
+    header_lines: list[list[Word]],
+    body: list[list[Word]],
+    fields: list[Field],
+    is_anchor,
+    attach_distance: float = 16.0,
+) -> list[dict[str, str]]:
+    """Read a table whose cells can wrap onto the lines above and below.
+
+    Each row has one anchor line (for example the line with the trade date),
+    found with `is_anchor(cells)`, where cells maps field names to the words
+    on that line. Every other line is joined to the nearest anchor line if it
+    is within `attach_distance` points. Footnotes (lines starting with a
+    lone '*') are never joined.
+
+    Returns the rows and the text of lines above the first anchor that were
+    too far from it to join (by field). That text is usually the end of a
+    row that started on the previous page.
+
+    Numbers are placed by alignment with their header first. The remaining
+    words are grouped into runs of words that sit close together (the words
+    of one cell on that line), and each run goes to the text column whose
+    x-range holds the run's centre. Text column ranges meet halfway between
+    the centres of their headers, or just before the next header if the
+    column is left-aligned.
+    """
+    phrases = header_phrases(header_lines, gap=4.0)
+    located: list[tuple[Field, Phrase]] = []
+    used: set[int] = set()
+    for f in fields:
+        match = next((i for i, p in enumerate(phrases) if i not in used and p.text.startswith(f.header)), None)
+        if match is None:
+            raise ValueError(f"Column header {f.header!r} not found, headers are {[p.text for p in phrases]}")
+        used.add(match)
+        located.append((f, phrases[match]))
+
+    numbers = [(f, p) for f, p in located if f.kind.startswith("number")]
+    texts = sorted(((f, p) for f, p in located if not f.kind.startswith("number")), key=lambda fp: fp[1].x0)
+    bounds = []
+    for i, (f, p) in enumerate(texts):
+        lo = bounds[-1][2] if bounds else float("-inf")
+        if i + 1 < len(texts):
+            nxt = texts[i + 1][1]
+            hi = nxt.x0 - 3 if f.kind == "left" else ((p.x0 + p.x1) / 2 + (nxt.x0 + nxt.x1) / 2) / 2
+        else:
+            hi = float("inf")
+        bounds.append((f.name, lo, hi))
+
+    def number_field(w: Word) -> str | None:
+        if is_number(w.text) or w.text == "-":
+            for f, p in numbers:
+                if f.kind == "number" and abs(w.x1 - p.x1) <= 4:
+                    return f.name
+                if f.kind == "number_centre" and abs(w.xc - (p.x0 + p.x1) / 2) <= 10:
+                    return f.name
+        return None
+
+    def text_field(x: float) -> str | None:
+        return next((name for name, lo, hi in bounds if lo <= x < hi), None)
+
+    cells_by_line = []
+    for line in body:
+        cells: dict[str, list[Word]] = {}
+        runs: list[list[Word]] = []
+        for w in line:
+            name = number_field(w)
+            if name is not None:
+                cells.setdefault(name, []).append(w)
+            elif runs and w.x0 - runs[-1][-1].x1 <= 3:
+                runs[-1].append(w)
+            else:
+                runs.append([w])
+        for run in runs:
+            name = text_field((run[0].x0 + run[-1].x1) / 2)
+            if name is not None:
+                cells.setdefault(name, []).extend(run)
+        cells_by_line.append(cells)
+
+    anchors = [i for i, cells in enumerate(cells_by_line) if is_anchor(cells)]
+    groups: dict[int, list[int]] = {a: [a] for a in anchors}
+    leading: list[int] = []
+    for i, line in enumerate(body):
+        if i in groups or line[0].text == "*":
+            continue
+        if not anchors:
+            leading.append(i)
+            continue
+        nearest = min(anchors, key=lambda a: abs(body[a][0].top - line[0].top))
+        if abs(body[nearest][0].top - line[0].top) <= attach_distance:
+            groups[nearest].append(i)
+        elif i < anchors[0]:
+            leading.append(i)
+
+    def join(line_numbers: list[int]) -> dict[str, str]:
+        words: dict[str, list[Word]] = {}
+        for i in line_numbers:
+            for name, ws in cells_by_line[i].items():
+                words.setdefault(name, []).extend(ws)
+        return {
+            name: " ".join(w.text for w in sorted(ws, key=lambda w: (round(w.top), w.x0)))
+            for name, ws in words.items()
+        }
+
+    return [join(groups[a]) for a in anchors], join(leading)
+
+
+def rejoin_split_cells(rows: list[dict[str, str]], field: str) -> None:
+    """Fix a cell cut by a page break: if a row's text ends with an unclosed
+    '(' and the next row's text starts with the rest up to ')', move that
+    rest back. Changes the rows in place."""
+    for prev, cur in zip(rows, rows[1:]):
+        p, c = prev.get(field, ""), cur.get(field, "")
+        if p.count("(") > p.count(")"):
+            m = re.match(r"^(\S+\))\s*", c)
+            if m:
+                prev[field] = f"{p} {m.group(1)}"
+                cur[field] = c[m.end():]
+
+
+def is_unclosed(text: str) -> bool:
+    return text.count("(") > text.count(")")
+
+
 def split_line(line: list[Word], columns: list[Column]) -> tuple[dict[str, str], list[str]]:
     """Assign the words of one line to columns. Returns (values, label words).
 
